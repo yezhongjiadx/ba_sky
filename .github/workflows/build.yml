@@ -21,9 +21,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y git make g++ libx11-dev libgl1-mesa-dev xorg-dev
           
-          # 拉取 bgfx 源码并编译工具
-          git clone --depth 1 --recursive https://github.com/bkaradzic/bgfx.git
+          # 拉取 bgfx 源码，并确保拉取所有子模块
+          git clone --recursive https://github.com/bkaradzic/bgfx.git
           cd bgfx
+          
+          # 关键修复：手动进入 bx 目录编译 genie
+          cd bx/tools/bin/linux
+          make
+          cd ../../../../
+          
+          # 现在 genie 已经就位，开始编译 tools (包含 shaderc)
           make tools -j$(nproc)
           
           # 将编译好的 shaderc 提取出来
@@ -36,7 +43,6 @@ jobs:
 
       - name: Download MaterialBinTool
         run: |
-          # 下载最新版打包工具
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
 
       - name: Generate Files and Compile
