@@ -15,33 +15,21 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Extract shaderc from NuGet
+      - name: Download Tools
         run: |
-          # 安装解压工具
-          sudo apt-get update
-          sudo apt-get install -y unzip wget
-          
-          # 从 NuGet 官方源下载包含 BGFX 工具的包
-          wget https://www.nuget.org/api/v2/package/Bgfx.Net.Tools/0.5.2 -O bgfx_tools.nupkg
-          
-          # 解压
-          unzip bgfx_tools.nupkg -d bgfx_tools
-          
-          # 提取 Linux x64 版本的 shaderc
-          cp bgfx_tools/runtimes/linux-x64/native/shaderc ./shaderc
+          # 1. 下载包含 Linux shaderc 的官方 bgfx 包
+          wget https://www.nuget.org/api/v2/package/bgfx/1.0.20 -O bgfx.nupkg
+          unzip bgfx.nupkg -d bgfx_pkg
+          cp bgfx_pkg/runtimes/linux-x64/native/shaderc ./shaderc
           chmod +x ./shaderc
           
-          # 验证（这一步如果能输出版本号，就100%稳了）
-          ./shaderc --version
-
-      - name: Download MaterialBinTool
-        run: |
+          # 2. 下载 MaterialBinTool
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
 
-      - name: Compile your SkyBox
+      - name: Compile SkyBox
         run: |
           mkdir -p output
-          # 直接编译你仓库里现成的文件
+          # 直接调用你仓库里现成的文件编译
           java -jar MaterialBinTool-0.9.1-all.jar -c "./lazurite_build/SkyBox/SkyBox.material.json" -o "./output" --shaderc "./shaderc"
 
       - name: Upload artifact
