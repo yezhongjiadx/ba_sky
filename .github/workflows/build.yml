@@ -15,18 +15,35 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Download Tools
+      - name: Build bgfx shaderc from source
         run: |
-          wget https://github.com/bkaradzic/bgfx/releases/download/v1.129.8898-394/bgfx-tools-linux.tar.gz
-          tar -xzf bgfx-tools-linux.tar.gz
+          # 安装编译依赖
+          sudo apt-get update
+          sudo apt-get install -y git make g++ libx11-dev libgl1-mesa-dev xorg-dev
+          
+          # 拉取 bgfx 源码并编译工具
+          git clone --depth 1 --recursive https://github.com/bkaradzic/bgfx.git
+          cd bgfx
+          make tools -j$(nproc)
+          
+          # 将编译好的 shaderc 提取出来
+          cp .build/linux64_gcc/bin/shadercRelease ../shaderc
+          cd ..
           chmod +x shaderc
+          
+          # 测试一下能不能跑
+          ./shaderc --version
+
+      - name: Download MaterialBinTool
+        run: |
+          # 下载最新版打包工具
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
 
       - name: Generate Files and Compile
         run: |
           mkdir -p compile/SkyBox/src
           
-          # 1. 生成着色器代码
+          # 现场生成顶点着色器
           cat > compile/SkyBox/src/Sky.vertex.sc << 'EOF'
           $input a_position
           $output v_dir
@@ -40,6 +57,7 @@ jobs:
           }
           EOF
           
+          # 现场生成片元着色器
           cat > compile/SkyBox/src/Sky.fragment.sc << 'EOF'
           $input v_dir
           
@@ -58,12 +76,13 @@ jobs:
           }
           EOF
           
+          # 现场生成 varying 定义
           cat > compile/SkyBox/src/Sky.varying.def.sc << 'EOF'
           vec3 a_position  : POSITION;
           vec3 v_dir       : TEXCOORD0;
           EOF
           
-          # 2. 生成绝对标准的 JSON 文件
+          # 现场生成最标准的 JSON
           cat > compile/SkyBox/Sky.material.json << 'EOF'
           {
             "materials": {
@@ -88,6 +107,7 @@ jobs:
           EOF
           
           mkdir -p output
+          # 开始编译
           java -jar MaterialBinTool-0.9.1-all.jar -c compile/SkyBox/Sky.material.json -o ./output --shaderc ./shaderc
 
       - name: Upload artifact
