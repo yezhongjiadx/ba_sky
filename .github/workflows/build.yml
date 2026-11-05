@@ -1,0 +1,97 @@
+name: Build SkyBox Ultimate
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Download Tools
+        run: |
+          wget https://github.com/bkaradzic/bgfx/releases/download/v1.129.8898-394/bgfx-tools-linux.tar.gz
+          tar -xzf bgfx-tools-linux.tar.gz
+          chmod +x shaderc
+          wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
+
+      - name: Generate Files and Compile
+        run: |
+          mkdir -p compile/SkyBox/src
+          
+          # 1. 生成着色器代码
+          cat > compile/SkyBox/src/Sky.vertex.sc << 'EOF'
+          $input a_position
+          $output v_dir
+          
+          #include <bgfx_shader.sh>
+          
+          void main()
+          {
+              v_dir = a_position;
+              gl_Position = mul(u_viewProj, vec4(a_position, 1.0));
+          }
+          EOF
+          
+          cat > compile/SkyBox/src/Sky.fragment.sc << 'EOF'
+          $input v_dir
+          
+          #include <bgfx_shader.sh>
+          
+          SAMPLER2D(s_sky_tex, 0);
+          
+          void main()
+          {
+              vec3 dir = normalize(v_dir);
+              float phi = atan(dir.z, dir.x);
+              float theta = asin(dir.y);
+              vec2 uv = vec2(phi / (2.0 * PI) + 0.5, theta / PI + 0.5);
+              vec4 color = texture2D(s_sky_tex, uv);
+              gl_FragColor = color;
+          }
+          EOF
+          
+          cat > compile/SkyBox/src/Sky.varying.def.sc << 'EOF'
+          vec3 a_position  : POSITION;
+          vec3 v_dir       : TEXCOORD0;
+          EOF
+          
+          # 2. 生成绝对标准的 JSON 文件
+          cat > compile/SkyBox/Sky.material.json << 'EOF'
+          {
+            "materials": {
+              "version": 1,
+              "Sky": {
+                "vertexShader": "Sky.vertex",
+                "fragmentShader": "Sky.fragment",
+                "variants": [
+                  {
+                    "passes": [
+                      {
+                        "renderMode": "Sky",
+                        "vertexShader": "Sky.vertex",
+                        "fragmentShader": "Sky.fragment"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+          EOF
+          
+          mkdir -p output
+          java -jar MaterialBinTool-0.9.1-all.jar -c compile/SkyBox/Sky.material.json -o ./output --shaderc ./shaderc
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sky-Material-Bin
+          path: ./output/
