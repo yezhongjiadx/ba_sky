@@ -9,34 +9,32 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build shaderc via CMake (Lean)
+      - name: Build shaderc via Make
         run: |
           sudo apt-get update
-          sudo apt-get install -y git make cmake g++ libx11-dev libgl1-mesa-dev xorg-dev
+          sudo apt-get install -y git make g++ libx11-dev libgl1-mesa-dev xorg-dev
           
-          git clone https://github.com/bkaradzic/bgfx.cmake.git
-          cd bgfx.cmake
-          git submodule update --init --recursive
+          # 拉取源码
+          git clone --recursive https://github.com/bkaradzic/bgfx.git
+          cd bgfx
           
-          # 关键改动：关闭耗内存的 WebGPU、Vulkan、DirectX 等后端
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBGFX_BUILD_TOOLS=ON \
-            -DBGFX_CONFIG_RENDERER_DAWN=OFF \
-            -DBGFX_CONFIG_RENDERER_VULKAN=OFF \
-            -DBGFX_CONFIG_RENDERER_DIRECT3D11=OFF \
-            -DBGFX_CONFIG_RENDERER_DIRECT3D12=OFF \
-            -DBGFX_CONFIG_RENDERER_METAL=OFF
-            
-          # 开始编译
-          cmake --build build -j$(nproc)
+          # 【核心修复】：赋予 genie 执行权限，解决之前的 Error 127
+          chmod +x bx/tools/bin/linux/genie
           
-          # 自动提取
-          find build -name shaderc -type f -exec cp {} ../shaderc \;
+          # 开始编译 tools（包含 shaderc）
+          make tools -j$(nproc)
+          
+          # 提取出来
+          cp .build/linux64_gcc/bin/shadercRelease ../shaderc
           cd ..
           chmod +x shaderc
           ./shaderc --version
@@ -45,66 +43,14 @@ jobs:
         run: |
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
 
-      - name: Generate Files and Compile
+      - name: Compile your SkyBox
         run: |
-          mkdir -p compile/SkyBox/src
-          
-          cat > compile/SkyBox/src/Sky.vertex.sc << 'EOF'
-          $input a_position
-          $output v_dir
-          #include <bgfx_shader.sh>
-          void main()
-          {
-              v_dir = a_position;
-              gl_Position = mul(u_viewProj, vec4(a_position, 1.0));
-          }
-          EOF
-          
-          cat > compile/SkyBox/src/Sky.fragment.sc << 'EOF'
-          $input v_dir
-          #include <bgfx_shader.sh>
-          SAMPLER2D(s_sky_tex, 0);
-          void main()
-          {
-              vec3 dir = normalize(v_dir);
-              float phi = atan(dir.z, dir.x);
-              float theta = asin(dir.y);
-              vec2 uv = vec2(phi / (2.0 * PI) + 0.5, theta / PI + 0.5);
-              vec4 color = texture2D(s_sky_tex, uv);
-              gl_FragColor = color;
-          }
-          EOF
-          
-          cat > compile/SkyBox/src/Sky.varying.def.sc << 'EOF'
-          vec3 a_position  : POSITION;
-          vec3 v_dir       : TEXCOORD0;
-          EOF
-          
-          cat > compile/SkyBox/Sky.material.json << 'EOF'
-          {
-            "materials": {
-              "version": 1,
-              "Sky": {
-                "vertexShader": "Sky.vertex",
-                "fragmentShader": "Sky.fragment",
-                "variants": [
-                  {
-                    "passes": [
-                      {
-                        "renderMode": "Sky",
-                        "vertexShader": "Sky.vertex",
-                        "fragmentShader": "Sky.fragment"
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
-          }
-          EOF
-          
+          # 创建输出目录
           mkdir -p output
-          java -jar MaterialBinTool-0.9.1-all.jar -c compile/SkyBox/Sky.material.json -o ./output --shaderc ./shaderc
+          
+          # 直接用你仓库里现成的文件编译（不再现场生成了）
+          # 注意：这里直接指向了你图2里的准确路径
+          java -jar MaterialBinTool-0.9.1-all.jar -c "./lazurite_build/SkyBox/SkyBox.material.json" -o "./output" --shaderc "./shaderc"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
