@@ -17,11 +17,13 @@ jobs:
 
       - name: Download Tools
         run: |
-          # 1. 下载包含 Linux shaderc 的官方 bgfx 包
-          wget https://www.nuget.org/api/v2/package/bgfx/1.0.20 -O bgfx.nupkg
-          unzip bgfx.nupkg -d bgfx_pkg
-          cp bgfx_pkg/runtimes/linux-x64/native/shaderc ./shaderc
-          chmod +x ./shaderc
+          # 1. 下载绝对存在的官方老版本 Linux shaderc
+          wget https://github.com/bkaradzic/bgfx/releases/download/v1.118.8416-338/bgfx-tools-linux.tar.gz
+          tar -xzf bgfx-tools-linux.tar.gz
+          chmod +x shaderc
+          
+          # 验证是否可用（万一版本太老，这里会报错）
+          ./shaderc --version
           
           # 2. 下载 MaterialBinTool
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
@@ -29,7 +31,7 @@ jobs:
       - name: Compile SkyBox
         run: |
           mkdir -p output
-          # 直接调用你仓库里现成的文件编译
+          # 3. 强制编译（用现成的 JSON 和你的代码）
           java -jar MaterialBinTool-0.9.1-all.jar -c "./lazurite_build/SkyBox/SkyBox.material.json" -o "./output" --shaderc "./shaderc"
 
       - name: Upload artifact
