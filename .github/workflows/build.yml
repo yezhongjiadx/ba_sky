@@ -9,29 +9,26 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Download Tools
+      - name: Download Tools & Compile
         run: |
-          # 1. 下载绝对存在的官方老版本 Linux shaderc
-          wget https://github.com/bkaradzic/bgfx/releases/download/v1.118.8416-338/bgfx-tools-linux.tar.gz
-          tar -xzf bgfx-tools-linux.tar.gz
-          chmod +x shaderc
+          # 1. 从 LWJGL 官方稳定源直接下载 Linux 版 shaderc 文件[reference:0]
+          wget https://build.lwjgl.org/nightly/linux/x64/bgfx-tools/shaderc
+          chmod +x ./shaderc
           
-          # 验证是否可用（万一版本太老，这里会报错）
-          ./shaderc --version
-          
-          # 2. 下载 MaterialBinTool
+          # 2. 下载 MaterialBinTool 打包工具
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
-
-      - name: Compile SkyBox
-        run: |
+          
+          # 3. 准备输出目录并执行编译
           mkdir -p output
-          # 3. 强制编译（用现成的 JSON 和你的代码）
           java -jar MaterialBinTool-0.9.1-all.jar -c "./lazurite_build/SkyBox/SkyBox.material.json" -o "./output" --shaderc "./shaderc"
 
       - name: Upload artifact
