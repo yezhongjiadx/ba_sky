@@ -15,23 +15,27 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build shaderc via CMake
+      - name: Build shaderc via CMake (Lean)
         run: |
           sudo apt-get update
           sudo apt-get install -y git make cmake g++ libx11-dev libgl1-mesa-dev xorg-dev
           
-          # 使用官方的 CMake 项目编译，完全不需要 genie
           git clone https://github.com/bkaradzic/bgfx.cmake.git
           cd bgfx.cmake
           git submodule update --init --recursive
           
-          # 配置 CMake，只编译工具
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBGFX_BUILD_TOOLS=ON
-          
+          # 关键改动：关闭耗内存的 WebGPU、Vulkan、DirectX 等后端
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBGFX_BUILD_TOOLS=ON \
+            -DBGFX_CONFIG_RENDERER_DAWN=OFF \
+            -DBGFX_CONFIG_RENDERER_VULKAN=OFF \
+            -DBGFX_CONFIG_RENDERER_DIRECT3D11=OFF \
+            -DBGFX_CONFIG_RENDERER_DIRECT3D12=OFF \
+            -DBGFX_CONFIG_RENDERER_METAL=OFF
+            
           # 开始编译
           cmake --build build -j$(nproc)
           
-          # 自动找到生成的 shaderc 并复制到外层
+          # 自动提取
           find build -name shaderc -type f -exec cp {} ../shaderc \;
           cd ..
           chmod +x shaderc
