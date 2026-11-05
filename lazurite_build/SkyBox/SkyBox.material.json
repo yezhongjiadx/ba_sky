@@ -1,0 +1,33 @@
+{
+  "materials": {
+    "version": 1,
+    "SkyBox": {
+      "states": ["DisableCulling", "DisableDepthTest"],
+      "vertexShader": "Sky.vertex",
+      "fragmentShader": "Sky.fragment",
+      "variants": [
+        {
+          "states": [],
+          "samplers": ["s_sky_tex"],
+          "vertexFields": [
+            { "field": "POSITION" }
+          ],
+          "passes": [
+            {
+              "name": "Sky",
+              "renderMode": "Sky",
+              "vertexShader": "Sky.vertex",
+              "fragmentShader": "Sky.fragment"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "samplers": {
+    "s_sky_tex": {
+      "type": "texture2d",
+      "texture": "textures/sky"
+    }
+  }
+}
