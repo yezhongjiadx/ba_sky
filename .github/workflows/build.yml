@@ -1,4 +1,4 @@
-name: Build SkyBox Ultimate
+name: Build SkyBox using Pro Template
 
 on:
   push:
@@ -9,27 +9,59 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Download Tools & Compile
+      - name: Download Pro Template & Tools
         run: |
-          # 1. 从 LWJGL 官方稳定源直接下载 Linux 版 shaderc 文件[reference:0]
+          # 1. 白嫖大神的项目模板（自带完美的 JSON 和构建脚本）
+          git clone https://github.com/devendrn/newb-x-mcbe.git
+          
+          # 2. 下载官方稳定版 Linux shaderc
           wget https://build.lwjgl.org/nightly/linux/x64/bgfx-tools/shaderc
           chmod +x ./shaderc
           
-          # 2. 下载 MaterialBinTool 打包工具
+          # 3. 下载 MaterialBinTool
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
+
+      - name: Inject Code & Compile
+        run: |
+          # 进入大神项目目录
+          cd newb-x-mcbe
           
-          # 3. 准备输出目录并执行编译
+          # 我们的目标是它的 Sky 文件夹
+          mkdir -p src/materials/Sky/src
+          
+          # 把我们刚刚写的顶点着色器塞进去（按它的命名规则）
+          cat > src/materials/Sky/src/Sky.vertex.sc << 'EOF'
+          $input a_position
+          $output v_dir
+          #include <bgfx_shader.sh>
+          void main()
+          {
+              v_dir = a_position;
+              gl_Position = mul(u_viewProj, vec4(a_position, 1.0));
+          }
+          EOF
+          
+          # 把我们写的片元着色器塞进去
+          cat > src/materials/Sky/src/Sky.fragment.sc << 'EOF'
+          $input v_dir
+          #include <bgfx_shader.sh>
+          SAMPLER2D(s_sky_tex, 0);
+          void main()
+          {
+              vec3 dir = normalize(v_dir);
+              float phi = atan(dir.z, dir.x);
+              float theta = asin(dir.y);
+              vec2 uv = vec2(phi / (2.0 * PI) + 0.5, theta / PI + 0.5);
+              vec4 color = texture2D(s_sky_tex, uv);
+              gl_FragColor = color;
+          }
+          EOF
+          
+          # 强制调用 MaterialBinTool 编译它自带的 JSON！
+          # 注意这里的路径：src/materials/Sky/Sky.material.json 是它模板里自带的！
+          cd ..
           mkdir -p output
-          java -jar MaterialBinTool-0.9.1-all.jar -c "./lazurite_build/SkyBox/SkyBox.material.json" -o "./output" --shaderc "./shaderc"
+          java -jar MaterialBinTool-0.9.1-all.jar -c "newb-x-mcbe/src/materials/Sky/Sky.material.json" -o "./output" --shaderc "./shaderc"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
