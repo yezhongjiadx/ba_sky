@@ -18,7 +18,7 @@ jobs:
           chmod +x ./shaderc
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
 
-      - name: Compile Local Files
+      - name: Compile
         run: |
           mkdir -p output
           java -jar MaterialBinTool-0.9.1-all.jar -c "./Sky.material.json" -o "./output" --shaderc "./shaderc"
