@@ -1,4 +1,4 @@
-name: Build SkyBox using Pro Template
+name: Build SkyBox Ultimate
 
 on:
   push:
@@ -9,28 +9,23 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Download Pro Template & Tools
+      - name: Download Tools
         run: |
-          # 1. 白嫖大神的项目模板（自带完美的 JSON 和构建脚本）
-          git clone https://github.com/devendrn/newb-x-mcbe.git
-          
-          # 2. 下载官方稳定版 Linux shaderc
+          # 1. 下载稳定版 Linux shaderc
           wget https://build.lwjgl.org/nightly/linux/x64/bgfx-tools/shaderc
           chmod +x ./shaderc
           
-          # 3. 下载 MaterialBinTool
+          # 2. 下载 MaterialBinTool
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
 
-      - name: Inject Code & Compile
+      - name: Generate Perfect JSON and Compile
         run: |
-          # 进入大神项目目录
-          cd newb-x-mcbe
+          # 建立独立编译目录
+          mkdir -p compile/SkyBox/src
+          mkdir -p output
           
-          # 我们的目标是它的 Sky 文件夹
-          mkdir -p src/materials/Sky/src
-          
-          # 把我们刚刚写的顶点着色器塞进去（按它的命名规则）
-          cat > src/materials/Sky/src/Sky.vertex.sc << 'EOF'
+          # 现场生成顶点着色器
+          cat > compile/SkyBox/src/Sky.vertex.sc << 'EOF'
           $input a_position
           $output v_dir
           #include <bgfx_shader.sh>
@@ -41,8 +36,8 @@ jobs:
           }
           EOF
           
-          # 把我们写的片元着色器塞进去
-          cat > src/materials/Sky/src/Sky.fragment.sc << 'EOF'
+          # 现场生成片元着色器
+          cat > compile/SkyBox/src/Sky.fragment.sc << 'EOF'
           $input v_dir
           #include <bgfx_shader.sh>
           SAMPLER2D(s_sky_tex, 0);
@@ -56,12 +51,50 @@ jobs:
               gl_FragColor = color;
           }
           EOF
+
+          # 现场生成 varying 定义
+          cat > compile/SkyBox/src/Sky.varying.def.sc << 'EOF'
+          vec3 a_position  : POSITION;
+          vec3 v_dir       : TEXCOORD0;
+          EOF
+
+          # 现场生成【绝对完美】的 JSON（包含所有数组，防止空指针）
+          cat > compile/SkyBox/Sky.material.json << 'EOF'
+          {
+            "materials": {
+              "version": 1,
+              "Sky": {
+                "vertexShader": "Sky.vertex",
+                "fragmentShader": "Sky.fragment",
+                "variants": [
+                  {
+                    "states": [],
+                    "samplers": ["s_sky_tex"],
+                    "vertexFields": [
+                      { "field": "POSITION" }
+                    ],
+                    "passes": [
+                      {
+                        "renderMode": "Sky",
+                        "vertexShader": "Sky.vertex",
+                        "fragmentShader": "Sky.fragment"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            "samplers": {
+              "s_sky_tex": {
+                "type": "texture2d",
+                "texture": "textures/sky"
+              }
+            }
+          }
+          EOF
           
-          # 强制调用 MaterialBinTool 编译它自带的 JSON！
-          # 注意这里的路径：src/materials/Sky/Sky.material.json 是它模板里自带的！
-          cd ..
-          mkdir -p output
-          java -jar MaterialBinTool-0.9.1-all.jar -c "newb-x-mcbe/src/materials/Sky/Sky.material.json" -o "./output" --shaderc "./shaderc"
+          # 执行编译
+          java -jar MaterialBinTool-0.9.1-all.jar -c "compile/SkyBox/Sky.material.json" -o "./output" --shaderc "./shaderc"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
