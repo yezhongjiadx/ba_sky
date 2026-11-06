@@ -18,19 +18,63 @@ jobs:
 
       - name: Install Tools & Headers
         run: |
-          pip install lazurite
+          pip install --upgrade lazurite
           wget https://build.lwjgl.org/nightly/linux/x64/bgfx-tools/shaderc
           chmod +x ./shaderc
           wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_shader.sh
 
       - name: Compile with Lazurite
         run: |
+          # 清理旧环境
+          rm -rf lazurite_build
           mkdir -p lazurite_build/SkyBox/shaders
+          
+          # 复制所有必要的文件
           cp Sky.vertex.sc lazurite_build/SkyBox/shaders/
           cp Sky.fragment.sc lazurite_build/SkyBox/shaders/
           cp bgfx_shader.sh lazurite_build/SkyBox/shaders/
+          
+          # 如果你本地没有 sky.lazurite，这里现场生成一个
+          cat > lazurite_build/sky.lazurite << 'EOF'
+          {
+              "materials": [{"name": "SkyBox", "vertex_shader": "Sky.vertex", "fragment_shader": "Sky.fragment"}],
+              "shaders": [
+                  {"name": "Sky.vertex", "path": "SkyBox/shaders/Sky.vertex.sc", "type": "vertex"},
+                  {"name": "Sky.fragment", "path": "SkyBox/shaders/Sky.fragment.sc", "type": "fragment"}
+              ]
+          }
+          EOF
+
+          cat > lazurite_build/project.json << 'EOF'
+          {
+            "base_profile": {
+              "platforms": ["ESSL_320"],
+              "include_search_paths": ["SkyBox/shaders"]
+            }
+          }
+          EOF
+          
+          cat > lazurite_build/SkyBox/SkyBox.material.json << 'EOF'
+          {
+            "materials": [
+              {
+                "name": "SkyBox",
+                "type": "skybox",
+                "vertexShader": "Sky.vertex",
+                "fragmentShader": "Sky.fragment",
+                "samplers": [
+                  {
+                    "name": "s_sky_tex",
+                    "texture": "textures/sky"
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+
           mkdir -p output
-          # 注意：这里没有 -i 参数，搜索路径已在 project.json 中定义
+          # 执行编译
           lazurite build "./lazurite_build" -o "./output" --shaderc "./shaderc"
 
       - name: Upload Artifact
