@@ -17,51 +17,78 @@ jobs:
           chmod +x ./shaderc
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
 
-      - name: Unpack, Inject, and Compile
+      - name: Generate and Compile
         run: |
+          mkdir -p compile/src
           mkdir -p output
-
-          # 1. 反编译你提供的、带完整结构的 Sky.material.bin
-          java -jar MaterialBinTool-0.9.1-all.jar -u "Sky.material.bin" -o "./unpacked"
-
-          # 2. 找到解包出的 JSON 并安全地注入你的代码
-          TARGET_JSON=$(find ./unpacked -name "*.json" | head -n 1)
-          python3 -c "
-          import json
-          with open('$TARGET_JSON', 'r') as f:
-              data = json.load(f)
           
-          def patch_material(mat):
-              mat['vertexShader'] = 'Sky.vertex'
-              mat['fragmentShader'] = 'Sky.fragment'
-              if 'passes' in mat:
-                  for p in mat['passes']:
-                      p['vertexShader'] = 'Sky.vertex'
-                      p['fragmentShader'] = 'Sky.fragment'
-                      if 'vertexFields' in p:
-                          p['vertexFields'] = ['POSITION']
-                      if 'samplers' in p:
-                          p['samplers'] = ['s_sky_tex']
+          cat > compile/src/Sky.vertex.sc << 'EOF'
+          $input a_position
+          $output v_dir
+          #include <bgfx_shader.sh>
+          void main()
+          {
+              v_dir = a_position;
+              gl_Position = mul(u_viewProj, vec4(a_position, 1.0));
+          }
+          EOF
+          
+          cat > compile/src/Sky.fragment.sc << 'EOF'
+          $input v_dir
+          #include <bgfx_shader.sh>
+          SAMPLER2D(s_sky_tex, 0);
+          void main()
+          {
+              vec3 dir = normalize(v_dir);
+              float phi = atan(dir.z, dir.x);
+              float theta = asin(dir.y);
+              vec2 uv = vec2(phi / (2.0 * PI) + 0.5, theta / PI + 0.5);
+              vec4 color = texture2D(s_sky_tex, uv);
+              gl_FragColor = color;
+          }
+          EOF
 
-          if 'materials' in data:
-              for k in data['materials']:
-                  patch_material(data['materials'][k])
-          else:
-              patch_material(data)
-
-          with open('$TARGET_JSON', 'w') as f:
-              json.dump(data, f, indent=2)
-          "
-
-          # 3. 将你的着色器源码放入解包目录的 src 文件夹
-          SRC_DIR=$(dirname "$TARGET_JSON")/src
-          mkdir -p "$SRC_DIR"
-          cp Sky.vertex.sc "$SRC_DIR/"
-          cp Sky.fragment.sc "$SRC_DIR/"
-          cp varying.def.sc "$SRC_DIR/"
-
-          # 4. 用修改后的模板重新编译
-          java -jar MaterialBinTool-0.9.1-all.jar -c "$TARGET_JSON" -o "./output" --shaderc "./shaderc"
+          cat > compile/src/Sky.varying.def.sc << 'EOF'
+          vec3 a_position  : POSITION;
+          vec3 v_dir       : TEXCOORD0;
+          EOF
+          
+          # 【绝对防报错结构】variant + passes + 对象数组
+          cat > compile/Sky.material.json << 'EOF'
+          {
+            "materials": {
+              "Sky": {
+                "vertexShader": "Sky.vertex",
+                "fragmentShader": "Sky.fragment",
+                "variants": [
+                  {
+                    "states": [],
+                    "samplers": ["s_sky_tex"],
+                    "vertexFields": [
+                      { "field": "POSITION" }
+                    ],
+                    "passes": [
+                      {
+                        "name": "Sky",
+                        "renderMode": "Sky",
+                        "vertexShader": "Sky.vertex",
+                        "fragmentShader": "Sky.fragment"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            "samplers": {
+              "s_sky_tex": {
+                "type": "texture2d",
+                "texture": "textures/sky"
+              }
+            }
+          }
+          EOF
+          
+          java -jar MaterialBinTool-0.9.1-all.jar -c "compile/Sky.material.json" -o "./output" --shaderc "./shaderc"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
