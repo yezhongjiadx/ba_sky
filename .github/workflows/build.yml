@@ -18,23 +18,12 @@ jobs:
           chmod +x ./shaderc
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
 
-      - name: Force Fix JSON and Compile
+      - name: Compile
         run: |
           mkdir -p output
           
-          # 1. 确保你的源码在标准的 src 目录下（如果没有，自动创建并复制）
-          mkdir -p src
-          cp Sky.vertex.sc src/ 2>/dev/null || true
-          cp Sky.fragment.sc src/ 2>/dev/null || true
-          cp varying.def.sc src/ 2>/dev/null || true
-          
-          # 2. 暴力强改 JSON 里的名字，不管它原来是啥前缀，统统改成 Sky.vertex 和 Sky.fragment
-          # 这样就能和咱们的 .sc 文件完全对应上了
-          sed -i 's/"vertexShader": *"[^"]*"/"vertexShader": "Sky.vertex"/g' SkyBox.material.json
-          sed -i 's/"fragmentShader": *"[^"]*"/"fragmentShader": "Sky.fragment"/g' SkyBox.material.json
-          
-          # 3. 强行编译
-          java -jar MaterialBinTool-0.9.1-all.jar -c "./SkyBox.material.json" -o "./output" --shaderc "./shaderc"
+          # 这里用你实际的文件名！如果叫 SkyBox.material.json 就用下面这句
+          java -jar MaterialBinTool-0.9.1-all.jar -c "./Sky.material.json" -o "./output" --shaderc "./shaderc"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
