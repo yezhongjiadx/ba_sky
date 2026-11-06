@@ -21,23 +21,32 @@ jobs:
       - name: Unpack Official Bin, Replace Code, and Compile
         run: |
           mkdir -p output
+          mkdir -p unpacked
           
-          # 1. 找到你上传的官方 bin 文件，并反编译它 (-u)
-          # 无论你叫它什么名字，这里都会去抓取
+          # 1. 反编译
           BIN_FILE=$(find . -maxdepth 1 -name "*.material.bin" | head -n 1)
           echo "找到的原始文件: $BIN_FILE"
-          
           java -jar MaterialBinTool-0.9.1-all.jar -u "$BIN_FILE" -o ./unpacked
           
-          # 2. 找到反编译出来的完美 JSON
-          TARGET_JSON=$(find ./unpacked -name "*.material.json" | head -n 1)
+          # 【打印一下解包出来的结构，方便排错】
+          echo "====== 解包后的目录结构 ======"
+          ls -R ./unpacked
+          echo "=============================="
+          
+          # 2. 放宽搜索条件，找所有的 json
+          TARGET_JSON=$(find ./unpacked -type f -name "*.json" | head -n 1)
           echo "找到的完美 JSON: $TARGET_JSON"
           
-          # 3. 强行把 JSON 里的着色器名字改成咱们的
+          if [ -z "$TARGET_JSON" ]; then
+            echo "Error: 解包后找不到任何 JSON 文件！"
+            exit 1
+          fi
+          
+          # 3. 修改 JSON 里的着色器名字
           sed -i 's/"vertexShader": *"[^"]*"/"vertexShader": "Sky.vertex"/g' "$TARGET_JSON"
           sed -i 's/"fragmentShader": *"[^"]*"/"fragmentShader": "Sky.fragment"/g' "$TARGET_JSON"
           
-          # 4. 找到解包出来的 src 目录，把我们的代码塞进去
+          # 4. 把代码放入 src
           SRC_DIR=$(dirname "$TARGET_JSON")/src
           mkdir -p "$SRC_DIR"
           
@@ -72,7 +81,7 @@ jobs:
           vec3 v_dir       : TEXCOORD0;
           EOF
           
-          # 5. 用解剖出来的完美骨架，重新打包 (-c)
+          # 5. 编译
           java -jar MaterialBinTool-0.9.1-all.jar -c "$TARGET_JSON" -o "./output" --shaderc "./shaderc"
 
       - name: Upload artifact
