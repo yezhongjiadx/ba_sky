@@ -15,17 +15,14 @@ jobs:
         run: |
           wget https://build.lwjgl.org/nightly/linux/x64/bgfx-tools/shaderc
           chmod +x ./shaderc
-          # 使用官方 0.5.1 版本，容错率最高
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.5.1/MaterialBinTool-0.5.1-all.jar
 
       - name: Generate and Compile
         run: |
-          # 清空旧文件，防止任何本地脏数据干扰
           rm -rf compile
           mkdir -p compile/SkyBox/src
           mkdir -p output
           
-          # 生成顶点着色器
           cat > compile/SkyBox/src/Sky.vertex.sc << 'EOF'
           $input a_position
           $output v_dir
@@ -37,7 +34,6 @@ jobs:
           }
           EOF
           
-          # 生成片元着色器
           cat > compile/SkyBox/src/Sky.fragment.sc << 'EOF'
           $input v_dir
           #include <bgfx_shader.sh>
@@ -53,50 +49,35 @@ jobs:
           }
           EOF
 
-          # 生成 Varying
           cat > compile/SkyBox/src/Sky.varying.def.sc << 'EOF'
           vec3 a_position  : POSITION;
           vec3 v_dir       : TEXCOORD0;
           EOF
           
-          # 生成绝对纯净的 JSON（这就是治好空指针的神药）
+          # 【核心修复】：0.5.1 专属的纯正 JSON 结构
           cat > compile/SkyBox/Sky.material.json << 'EOF'
           {
             "materials": {
-              "version": 1,
               "Sky": {
-                "vertexShader": "Sky.vertex",
-                "fragmentShader": "Sky.fragment",
-                "variants": [
+                "passes": [
                   {
-                    "passes": [
-                      {
-                        "name": "Sky",
-                        "renderMode": "Sky",
-                        "vertexShader": "Sky.vertex",
-                        "fragmentShader": "Sky.fragment",
-                        "vertexFields": [
-                          "POSITION"
-                        ],
-                        "samplers": [
-                          "s_sky_tex"
-                        ]
-                      }
+                    "name": "Sky",
+                    "vertexShader": "Sky.vertex",
+                    "fragmentShader": "Sky.fragment",
+                    "renderMode": "Sky",
+                    "vertexFields": [
+                      "POSITION"
+                    ],
+                    "samplers": [
+                      "s_sky_tex"
                     ]
                   }
                 ]
-              }
-            },
-            "samplers": {
-              "s_sky_tex": {
-                "type": "texture2d",
-                "texture": "textures/sky"
               }
             }
           }
           EOF
           
-          # 编译
           java -jar MaterialBinTool-0.5.1-all.jar -c "compile/SkyBox/Sky.material.json" -o "./output" --shaderc "./shaderc"
 
       - name: Upload Artifact
