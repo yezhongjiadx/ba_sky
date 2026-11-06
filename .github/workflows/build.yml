@@ -1,4 +1,4 @@
-name: Build SkyBox Ultimate (Final)
+name: Build SkyBox Ultimate
 
 on:
   push:
@@ -18,13 +18,12 @@ jobs:
           # 2. 下载 MaterialBinTool
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
 
-      - name: Setup Standard Workspace
+      - name: Generate Fixed JSON and Compile
         run: |
-          # 1. 从官方数据仓库下载标准 Sky.material.json 模板
           mkdir -p compile/SkyBox/src
-          wget https://raw.githubusercontent.com/ddf8196/RenderDragonData/main/data/1.21.0.0/Android/Sky.material.json -O compile/SkyBox/Sky.material.json
+          mkdir -p output
           
-          # 2. 现场生成着色器代码（与模板文件名匹配）
+          # 1. 现场生成顶点着色器 (完全没问题)
           cat > compile/SkyBox/src/Sky.vertex.sc << 'EOF'
           $input a_position
           $output v_dir
@@ -36,6 +35,7 @@ jobs:
           }
           EOF
           
+          # 2. 现场生成片元着色器 (完全没问题)
           cat > compile/SkyBox/src/Sky.fragment.sc << 'EOF'
           $input v_dir
           #include <bgfx_shader.sh>
@@ -51,21 +51,50 @@ jobs:
           }
           EOF
           
+          # 3. 现场生成 varying 定义
           cat > compile/SkyBox/src/Sky.varying.def.sc << 'EOF'
           vec3 a_position  : POSITION;
           vec3 v_dir       : TEXCOORD0;
           EOF
           
-          # 3. 修改 JSON 文件，指向我们的着色器文件
-          sed -i 's/"vertexShader": ".*"/"vertexShader": "Sky.vertex"/g' compile/SkyBox/Sky.material.json
-          sed -i 's/"fragmentShader": ".*"/"fragmentShader": "Sky.fragment"/g' compile/SkyBox/Sky.material.json
-          sed -i 's/"varyingDef": ".*"/"varyingDef": "Sky.varying"/g' compile/SkyBox/Sky.material.json
-
-      - name: Compile SkyBox
-        run: |
-          mkdir -p output
-          # 使用 -c 参数编译整个目录，MaterialBinTool 会自动处理依赖
-          java -jar MaterialBinTool-0.9.1-all.jar -c "compile/SkyBox" -o "./output" --shaderc "./shaderc"
+          # 4. 现场生成【去除 version 字段】的完美 JSON
+          cat > compile/SkyBox/Sky.material.json << 'EOF'
+          {
+            "materials": {
+              "Sky": {
+                "states": ["DisableCulling", "DisableDepthTest"],
+                "vertexShader": "Sky.vertex",
+                "fragmentShader": "Sky.fragment",
+                "variants": [
+                  {
+                    "states": [],
+                    "samplers": ["s_sky_tex"],
+                    "vertexFields": [
+                      { "field": "POSITION" }
+                    ],
+                    "passes": [
+                      {
+                        "name": "Sky",
+                        "renderMode": "Sky",
+                        "vertexShader": "Sky.vertex",
+                        "fragmentShader": "Sky.fragment"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            "samplers": {
+              "s_sky_tex": {
+                "type": "texture2d",
+                "texture": "textures/sky"
+              }
+            }
+          }
+          EOF
+          
+          # 开始编译
+          java -jar MaterialBinTool-0.9.1-all.jar -c "compile/SkyBox/Sky.material.json" -o "./output" --shaderc "./shaderc"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
