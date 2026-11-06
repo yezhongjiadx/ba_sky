@@ -1,1 +1,6 @@
-{}
+{
+  "base_profile": {
+    "platforms": ["android"],
+    "include_search_paths": ["lazurite_build/SkyBox/shaders"]
+  }
+}

@@ -21,13 +21,11 @@ jobs:
           pip install lazurite
           wget https://build.lwjgl.org/nightly/linux/x64/bgfx-tools/shaderc
           chmod +x ./shaderc
-          
-          # 下载之前导致 83 字节空壳的“罪魁祸首”——官方头文件
           wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_shader.sh
 
       - name: Compile with Lazurite
         run: |
-          # 把源码和头文件全部塞进 Lazurite 的工作目录
+          # 确保头文件和源码在正确的位置
           mkdir -p lazurite_build/SkyBox/shaders
           cp Sky.vertex.sc lazurite_build/SkyBox/shaders/
           cp Sky.fragment.sc lazurite_build/SkyBox/shaders/
@@ -35,8 +33,8 @@ jobs:
           
           mkdir -p output
           
-          # 强行指定头文件路径 (-i) 并执行编译
-          lazurite build "./lazurite_build" -o "./output" --shaderc "./shaderc" -i "./lazurite_build/SkyBox/shaders"
+          # 注意：这里没有 -i 参数了！
+          lazurite build "./lazurite_build" -o "./output" --shaderc "./shaderc"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
