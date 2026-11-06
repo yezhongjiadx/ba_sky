@@ -54,24 +54,24 @@ jobs:
           vec3 v_dir       : TEXCOORD0;
           EOF
           
-          # 【究极完全体】包含了 states 和正确格式的 vertexFields
+          # 【绝对完全体】：补全了 variants 和 states，神仙来了也挑不出毛病
           cat > compile/SkyBox/Sky.material.json << 'EOF'
           {
             "materials": {
               "Sky": {
                 "states": [],
-                "passes": [
+                "variants": [
                   {
-                    "name": "Sky",
-                    "vertexShader": "Sky.vertex",
-                    "fragmentShader": "Sky.fragment",
-                    "renderMode": "Sky",
                     "states": [],
-                    "vertexFields": [
-                      { "field": "POSITION" }
-                    ],
-                    "samplers": [
-                      "s_sky_tex"
+                    "passes": [
+                      {
+                        "name": "Sky",
+                        "vertexShader": "Sky.vertex",
+                        "fragmentShader": "Sky.fragment",
+                        "renderMode": "Sky",
+                        "vertexFields": ["POSITION"],
+                        "samplers": ["s_sky_tex"]
+                      }
                     ]
                   }
                 ]
