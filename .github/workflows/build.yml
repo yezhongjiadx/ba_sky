@@ -15,12 +15,12 @@ jobs:
           chmod +x ./shaderc
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
 
-      - name: Generate Perfect Workspace and Compile
+      - name: Generate V3 JSON and Compile
         run: |
           mkdir -p compile/src
           mkdir -p output
           
-          # 1. 现场写入你的顶点着色器
+          # 1. 写入顶点着色器
           cat > compile/src/Sky.vertex.sc << 'EOF'
           $input a_position
           $output v_dir
@@ -32,7 +32,7 @@ jobs:
           }
           EOF
           
-          # 2. 现场写入你的片元着色器
+          # 2. 写入片元着色器
           cat > compile/src/Sky.fragment.sc << 'EOF'
           $input v_dir
           #include <bgfx_shader.sh>
@@ -48,39 +48,54 @@ jobs:
           }
           EOF
 
-          # 3. 现场写入 varying 定义
+          # 3. 写入 varying
           cat > compile/src/Sky.varying.def.sc << 'EOF'
           vec3 a_position  : POSITION;
           vec3 v_dir       : TEXCOORD0;
           EOF
           
-          # 4. 【核心】现场生成带有完整 passes 和 variants 的完美 JSON
-          cat > compile/SkyBox.material.json << 'EOF'
+          # 4. 【绝杀】使用你反编译出来的 V3 骨架，但我们填满了 sampler 和 passes！
+          cat > compile/Sky.material.json << 'EOF'
           {
-            "materials": {
-              "version": 1,
-              "SkyBox": {
+            "version": 25,
+            "encryptionVariant": "None",
+            "name": "Sky",
+            "hasParentName": false,
+            "samplerDefinitionMap": {
+              "s_sky_tex": {
+                "reg": 0,
+                "access": "Read",
+                "precision": 0,
+                "allowUnorderedAccess": false,
+                "type": "Texture2D",
+                "textureFormat": "float",
+                "unknown1": 1,
+                "unknownByte": 0,
+                "hasUnknownByte2": false,
+                "unknownByte2": 0,
+                "hasDefaultTexture": false,
+                "hasUnknownString": false,
+                "hasCustomTypeInfo": false
+              }
+            },
+            "propertyFieldMap": {},
+            "formatVersion": "V3",
+            "passes": [
+              {
                 "vertexShader": "Sky.vertex",
                 "fragmentShader": "Sky.fragment",
-                "variants": [
-                  {
-                    "passes": [
-                      {
-                        "name": "Sky",
-                        "renderMode": "Sky",
-                        "vertexShader": "Sky.vertex",
-                        "fragmentShader": "Sky.fragment"
-                      }
-                    ]
-                  }
-                ]
+                "renderMode": "Sky",
+                "vertexFields": [
+                  { "field": "POSITION" }
+                ],
+                "samplers": ["s_sky_tex"]
               }
-            }
+            ]
           }
           EOF
           
           # 5. 编译
-          java -jar MaterialBinTool-0.9.1-all.jar -c "compile/SkyBox.material.json" -o "./output" --shaderc "./shaderc"
+          java -jar MaterialBinTool-0.9.1-all.jar -c "compile/Sky.material.json" -o "./output" --shaderc "./shaderc"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
