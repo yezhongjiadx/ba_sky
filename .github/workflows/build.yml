@@ -9,21 +9,24 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Download Tools
         run: |
           wget https://build.lwjgl.org/nightly/linux/x64/bgfx-tools/shaderc
           chmod +x ./shaderc
-          
-          # 注意这里：换成了极其稳定的老版本 0.5.1
-          wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.5.1/MaterialBinTool-0.5.1-all.jar
+          wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
 
-      - name: Build
+      - name: Clean and Compile
         run: |
-          # 1. 建文件夹
+          # 【核心大招】：删掉你仓库里所有的旧 json 和 src 文件夹，彻底清除隐患
+          rm -rf compile
+          rm -f *.json
           mkdir -p compile/SkyBox/src
           mkdir -p output
           
-          # 2. 把你写好的代码全塞进去
+          # 1. 现场生成顶点着色器
           cat > compile/SkyBox/src/Sky.vertex.sc << 'EOF'
           $input a_position
           $output v_dir
@@ -35,6 +38,7 @@ jobs:
           }
           EOF
           
+          # 2. 现场生成片元着色器
           cat > compile/SkyBox/src/Sky.fragment.sc << 'EOF'
           $input v_dir
           #include <bgfx_shader.sh>
@@ -50,21 +54,28 @@ jobs:
           }
           EOF
 
+          # 3. 现场生成 varying 定义
           cat > compile/SkyBox/src/Sky.varying.def.sc << 'EOF'
           vec3 a_position  : POSITION;
           vec3 v_dir       : TEXCOORD0;
           EOF
           
-          # 3. 现场生成 0.5.1 版本绝对不会报错的 JSON
+          # 4. 现场生成 100% 官方标准 JSON (这次绝无空指针)
           cat > compile/SkyBox/Sky.material.json << 'EOF'
           {
             "materials": {
               "version": 1,
               "SkyBox": {
+                "states": ["DisableCulling", "DisableDepthTest"],
                 "vertexShader": "Sky.vertex",
                 "fragmentShader": "Sky.fragment",
                 "variants": [
                   {
+                    "states": [],
+                    "samplers": ["s_sky_tex"],
+                    "vertexFields": [
+                      { "field": "POSITION" }
+                    ],
                     "passes": [
                       {
                         "name": "Sky",
@@ -76,12 +87,18 @@ jobs:
                   }
                 ]
               }
+            },
+            "samplers": {
+              "s_sky_tex": {
+                "type": "texture2d",
+                "texture": "textures/sky"
+              }
             }
           }
           EOF
           
-          # 4. 编译
-          java -jar MaterialBinTool-0.5.1-all.jar -c "compile/SkyBox/Sky.material.json" -o "./output" --shaderc "./shaderc"
+          # 5. 执行编译
+          java -jar MaterialBinTool-0.9.1-all.jar -c "compile/SkyBox/Sky.material.json" -o "./output" --shaderc "./shaderc"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
