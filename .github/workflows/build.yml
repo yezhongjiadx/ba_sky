@@ -1,4 +1,4 @@
-name: Build SkyBox Ultimate
+name: Build SkyBox with Lazurite
 
 on:
   push:
@@ -9,22 +9,36 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Download Tools
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Tools & Headers
         run: |
+          pip install lazurite
           wget https://build.lwjgl.org/nightly/linux/x64/bgfx-tools/shaderc
           chmod +x ./shaderc
-          wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
+          
+          # 下载之前导致 83 字节空壳的“罪魁祸首”——官方头文件
+          wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_shader.sh
 
-      - name: Compile Local Files
+      - name: Compile with Lazurite
         run: |
+          # 把源码和头文件全部塞进 Lazurite 的工作目录
+          mkdir -p lazurite_build/SkyBox/shaders
+          cp Sky.vertex.sc lazurite_build/SkyBox/shaders/
+          cp Sky.fragment.sc lazurite_build/SkyBox/shaders/
+          cp bgfx_shader.sh lazurite_build/SkyBox/shaders/
+          
           mkdir -p output
-          # 直接编译你本地的完美 V3 JSON
-          java -jar MaterialBinTool-0.9.1-all.jar -c "./Sky.material.json" -o "./output" --shaderc "./shaderc"
+          
+          # 强行指定头文件路径 (-i) 并执行编译
+          lazurite build "./lazurite_build" -o "./output" --shaderc "./shaderc" -i "./lazurite_build/SkyBox/shaders"
 
-      - name: Upload artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Sky-Material-Bin

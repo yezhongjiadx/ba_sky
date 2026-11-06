@@ -1,0 +1,16 @@
+{
+  "materials": [
+    {
+      "name": "SkyBox",
+      "type": "skybox",
+      "vertexShader": "Sky.vertex",
+      "fragmentShader": "Sky.fragment",
+      "samplers": [
+        {
+          "name": "s_sky_tex",
+          "texture": "textures/sky"
+        }
+      ]
+    }
+  ]
+}
