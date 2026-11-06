@@ -11,63 +11,57 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install Tools
+      - name: Download Tools
         run: |
-          pip install --upgrade lazurite
           wget https://build.lwjgl.org/nightly/linux/x64/bgfx-tools/shaderc
           chmod +x ./shaderc
-          wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_shader.sh
+          wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
 
-      - name: Compile with Lazurite
+      - name: Unpack, Inject, and Compile
         run: |
-          # 1. 彻底清空
-          rm -rf lazurite_build
-          mkdir -p lazurite_build/SkyBox/shaders
-          
-          # 2. 把你的代码和头文件放进对应位置
-          cp Sky.vertex.sc lazurite_build/SkyBox/shaders/
-          cp Sky.fragment.sc lazurite_build/SkyBox/shaders/
-          cp bgfx_shader.sh lazurite_build/SkyBox/shaders/
-          
-          # 3. 写入正确的 project.json
-          cat > lazurite_build/project.json << 'EOF'
-          {
-            "base_profile": {
-              "platforms": ["ESSL_320"],
-              "include_search_paths": ["SkyBox/shaders"]
-            }
-          }
-          EOF
-          
-          # 4. 【核心修复】这里必须叫 material.json，不能带前缀！
-          cat > lazurite_build/SkyBox/material.json << 'EOF'
-          {
-            "materials": [
-              {
-                "name": "SkyBox",
-                "type": "skybox",
-                "vertexShader": "Sky.vertex",
-                "fragmentShader": "Sky.fragment",
-                "samplers": [
-                  {
-                    "name": "s_sky_tex",
-                    "texture": "textures/sky"
-                  }
-                ]
-              }
-            ]
-          }
-          EOF
-
           mkdir -p output
+
+          # 1. 反编译你提供的、带完整结构的 Sky.material.bin
+          java -jar MaterialBinTool-0.9.1-all.jar -u "Sky.material.bin" -o "./unpacked"
+
+          # 2. 找到解包出的 JSON 并安全地注入你的代码
+          TARGET_JSON=$(find ./unpacked -name "*.json" | head -n 1)
+          python3 -c "
+          import json
+          with open('$TARGET_JSON', 'r') as f:
+              data = json.load(f)
           
-          # 5. 强制执行编译
-          lazurite build "./lazurite_build" -o "./output" --shaderc "./shaderc"
+          def patch_material(mat):
+              mat['vertexShader'] = 'Sky.vertex'
+              mat['fragmentShader'] = 'Sky.fragment'
+              if 'passes' in mat:
+                  for p in mat['passes']:
+                      p['vertexShader'] = 'Sky.vertex'
+                      p['fragmentShader'] = 'Sky.fragment'
+                      if 'vertexFields' in p:
+                          p['vertexFields'] = ['POSITION']
+                      if 'samplers' in p:
+                          p['samplers'] = ['s_sky_tex']
+
+          if 'materials' in data:
+              for k in data['materials']:
+                  patch_material(data['materials'][k])
+          else:
+              patch_material(data)
+
+          with open('$TARGET_JSON', 'w') as f:
+              json.dump(data, f, indent=2)
+          "
+
+          # 3. 将你的着色器源码放入解包目录的 src 文件夹
+          SRC_DIR=$(dirname "$TARGET_JSON")/src
+          mkdir -p "$SRC_DIR"
+          cp Sky.vertex.sc "$SRC_DIR/"
+          cp Sky.fragment.sc "$SRC_DIR/"
+          cp varying.def.sc "$SRC_DIR/"
+
+          # 4. 用修改后的模板重新编译
+          java -jar MaterialBinTool-0.9.1-all.jar -c "$TARGET_JSON" -o "./output" --shaderc "./shaderc"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
