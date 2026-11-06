@@ -1,0 +1,21 @@
+{
+    "materials": [
+        {
+            "name": "SkyBox",
+            "vertex_shader": "Sky.vertex",
+            "fragment_shader": "Sky.fragment"
+        }
+    ],
+    "shaders": [
+        {
+            "name": "Sky.vertex",
+            "path": "SkyBox/shaders/Sky.vertex.sc",
+            "type": "vertex"
+        },
+        {
+            "name": "Sky.fragment",
+            "path": "SkyBox/shaders/Sky.fragment.sc",
+            "type": "fragment"
+        }
+    ]
+}

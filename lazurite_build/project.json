@@ -1,6 +1,6 @@
 {
   "base_profile": {
     "platforms": ["ESSL_320"],
-    "include_search_paths": ["."]
+    "include_search_paths": ["SkyBox/shaders"]
   }
 }

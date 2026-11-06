@@ -1,4 +1,4 @@
-name: Build SkyBox Ultimate V3
+name: Build SkyBox Ultimate
 
 on:
   push:
@@ -15,14 +15,17 @@ jobs:
         run: |
           wget https://build.lwjgl.org/nightly/linux/x64/bgfx-tools/shaderc
           chmod +x ./shaderc
-          wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
+          # 使用官方 0.5.1 版本，容错率最高
+          wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.5.1/MaterialBinTool-0.5.1-all.jar
 
-      - name: Generate Perfect V3 Material and Compile
+      - name: Generate and Compile
         run: |
+          # 清空旧文件，防止任何本地脏数据干扰
+          rm -rf compile
           mkdir -p compile/SkyBox/src
           mkdir -p output
           
-          # 1. 现场生成顶点着色器
+          # 生成顶点着色器
           cat > compile/SkyBox/src/Sky.vertex.sc << 'EOF'
           $input a_position
           $output v_dir
@@ -34,7 +37,7 @@ jobs:
           }
           EOF
           
-          # 2. 现场生成片元着色器
+          # 生成片元着色器
           cat > compile/SkyBox/src/Sky.fragment.sc << 'EOF'
           $input v_dir
           #include <bgfx_shader.sh>
@@ -50,59 +53,51 @@ jobs:
           }
           EOF
 
-          # 3. 现场生成 varying
+          # 生成 Varying
           cat > compile/SkyBox/src/Sky.varying.def.sc << 'EOF'
           vec3 a_position  : POSITION;
           vec3 v_dir       : TEXCOORD0;
           EOF
           
-          # 4. 现场生成绝对完美的 26.x 版本 V3 JSON
+          # 生成绝对纯净的 JSON（这就是治好空指针的神药）
           cat > compile/SkyBox/Sky.material.json << 'EOF'
           {
-            "version": 25,
-            "encryptionVariant": "None",
-            "name": "Sky",
-            "hasParentName": false,
-            "samplerDefinitionMap": {
-              "s_sky_tex": {
-                "reg": 0,
-                "access": "Read",
-                "precision": 0,
-                "allowUnorderedAccess": false,
-                "type": "Texture2D",
-                "textureFormat": "float",
-                "unknown1": 1,
-                "unknownByte": 0,
-                "hasUnknownByte2": false,
-                "unknownByte2": 0,
-                "hasDefaultTexture": false,
-                "hasUnknownString": false,
-                "hasCustomTypeInfo": false
-              }
-            },
-            "propertyFieldMap": {
-              "FogColor": { "num": 1, "type": 2, "hasData": true, "vectorData": [1.0, 1.0, 1.0, 1.0] },
-              "LightDiffuseColorAndIlluminance": { "num": 1, "type": 2, "hasData": true, "vectorData": [1.0, 1.0, 1.0, 1.0] },
-              "LightWorldSpaceDirection": { "num": 1, "type": 2, "hasData": true, "vectorData": [0.0, -1.0, 0.0, 1.0] },
-              "MaterialID": { "num": 1, "type": 2, "hasData": true, "vectorData": [0.0, 0.0, 0.0, 0.0] },
-              "SkyColor": { "num": 1, "type": 2, "hasData": true, "vectorData": [1.0, 1.0, 1.0, 1.0] }
-            },
-            "formatVersion": "V3",
-            "passes": [
-              {
-                "name": "Sky",
+            "materials": {
+              "version": 1,
+              "Sky": {
                 "vertexShader": "Sky.vertex",
                 "fragmentShader": "Sky.fragment",
-                "renderMode": "Sky",
-                "vertexFields": ["POSITION"],
-                "samplers": ["s_sky_tex"]
+                "variants": [
+                  {
+                    "passes": [
+                      {
+                        "name": "Sky",
+                        "renderMode": "Sky",
+                        "vertexShader": "Sky.vertex",
+                        "fragmentShader": "Sky.fragment",
+                        "vertexFields": [
+                          "POSITION"
+                        ],
+                        "samplers": [
+                          "s_sky_tex"
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
-            ]
+            },
+            "samplers": {
+              "s_sky_tex": {
+                "type": "texture2d",
+                "texture": "textures/sky"
+              }
+            }
           }
           EOF
           
-          # 5. 直接用 MaterialBinTool 编译
-          java -jar MaterialBinTool-0.9.1-all.jar -c "compile/SkyBox/Sky.material.json" -o "./output" --shaderc "./shaderc"
+          # 编译
+          java -jar MaterialBinTool-0.5.1-all.jar -c "compile/SkyBox/Sky.material.json" -o "./output" --shaderc "./shaderc"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
