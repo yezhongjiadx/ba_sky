@@ -18,13 +18,10 @@ jobs:
           chmod +x ./shaderc
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
 
-      - name: Compile Local JSON
+      - name: Compile Local Files
         run: |
           mkdir -p output
-          
-          # 直接编译你推到仓库里的 JSON
-          # 注意替换为你实际的文件名，如果是 Sky.json 就用 Sky.json
-          java -jar MaterialBinTool-0.9.1-all.jar -c "./Sky.json" -o "./output" --shaderc "./shaderc"
+          java -jar MaterialBinTool-0.9.1-all.jar -c "./Sky.material.json" -o "./output" --shaderc "./shaderc"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
