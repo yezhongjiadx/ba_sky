@@ -18,56 +18,52 @@ jobs:
           chmod +x ./shaderc
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
 
-      - name: Unpack Official V3, Modify, and Compile
+      - name: Unpack from Pro Shader, Inject Your Code, and Compile
         run: |
           mkdir -p output
           
-          # 1. 反编译你上传的 300B bin 文件，获取 V3 骨架
+          # 1. 反编译你提取出来的、有完整结构的社区版 Sky.material.bin
           java -jar MaterialBinTool-0.9.1-all.jar -u "Sky.material.bin" -o "./unpacked"
           
-          # 找到解出来的 json
           TARGET_JSON=$(find ./unpacked -name "*.json" | head -n 1)
           
-          # 2. 用 Python 脚本精准修改 V3 JSON，避免任何格式错误
+          # 2. 用 Python 安全注入你的代码（不做任何底层结构破坏）
           python3 -c "
           import json
           with open('$TARGET_JSON', 'r') as f:
               data = json.load(f)
           
-          # 注入我们的采样器
-          data['samplerDefinitionMap'] = {
-              's_sky_tex': {
-                  'reg': 0, 'access': 'Read', 'precision': 0, 'allowUnorderedAccess': False,
-                  'type': 'Texture2D', 'textureFormat': 'float', 'unknown1': 1, 'unknownByte': 0,
-                  'hasUnknownByte2': False, 'unknownByte2': 0, 'hasDefaultTexture': False,
-                  'hasUnknownString': False, 'hasCustomTypeInfo': False
-              }
-          }
-          
-          # 注入我们的 passes 渲染通道 (注意 vertexFields 用纯字符串数组)
-          data['passes'] = [
-              {
-                  'name': 'Sky',
-                  'vertexShader': 'Sky.vertex',
-                  'fragmentShader': 'Sky.fragment',
-                  'renderMode': 'Sky',
-                  'vertexFields': ['POSITION'],
-                  'samplers': ['s_sky_tex']
-              }
-          ]
+          # 无论它原来有多少个 passes，我们只保留我们的这一层
+          # 找到 passes 所在的层级（有的在根目录，有的在 materials 里）
+          if 'materials' in data:
+              mat_key = list(data['materials'].keys())[0]
+              data['materials'][mat_key]['vertexShader'] = 'Sky.vertex'
+              data['materials'][mat_key]['fragmentShader'] = 'Sky.fragment'
+              # 有的 V3 格式还有 passes 数组，我们强行改掉
+              if 'passes' in data['materials'][mat_key]:
+                  for p in data['materials'][mat_key]['passes']:
+                      p['vertexShader'] = 'Sky.vertex'
+                      p['fragmentShader'] = 'Sky.fragment'
+          else:
+              data['vertexShader'] = 'Sky.vertex'
+              data['fragmentShader'] = 'Sky.fragment'
+              if 'passes' in data:
+                  for p in data['passes']:
+                      p['vertexShader'] = 'Sky.vertex'
+                      p['fragmentShader'] = 'Sky.fragment'
           
           with open('$TARGET_JSON', 'w') as f:
               json.dump(data, f, indent=2)
           "
           
-          # 3. 建立 src 目录放入你的代码
+          # 3. 把你的代码放进它的 src 目录
           SRC_DIR=$(dirname "$TARGET_JSON")/src
           mkdir -p "$SRC_DIR"
           cp Sky.vertex.sc "$SRC_DIR/"
           cp Sky.fragment.sc "$SRC_DIR/"
           cp varying.def.sc "$SRC_DIR/"
           
-          # 4. 重新编译
+          # 4. 重新打包编译
           java -jar MaterialBinTool-0.9.1-all.jar -c "$TARGET_JSON" -o "./output" --shaderc "./shaderc"
 
       - name: Upload artifact
