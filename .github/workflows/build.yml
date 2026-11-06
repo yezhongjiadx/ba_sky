@@ -54,25 +54,33 @@ jobs:
           vec3 v_dir       : TEXCOORD0;
           EOF
           
-          # 【核心修复】：0.5.1 专属的纯正 JSON 结构
+          # 【究极完全体】包含了 states 和正确格式的 vertexFields
           cat > compile/SkyBox/Sky.material.json << 'EOF'
           {
             "materials": {
               "Sky": {
+                "states": [],
                 "passes": [
                   {
                     "name": "Sky",
                     "vertexShader": "Sky.vertex",
                     "fragmentShader": "Sky.fragment",
                     "renderMode": "Sky",
+                    "states": [],
                     "vertexFields": [
-                      "POSITION"
+                      { "field": "POSITION" }
                     ],
                     "samplers": [
                       "s_sky_tex"
                     ]
                   }
                 ]
+              }
+            },
+            "samplers": {
+              "s_sky_tex": {
+                "type": "texture2d",
+                "texture": "textures/sky"
               }
             }
           }
