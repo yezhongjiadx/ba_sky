@@ -9,25 +9,34 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Download Tools
+      - name: Download Tools & Data
         run: |
+          # 1. 下载稳定版编译器
           wget https://build.lwjgl.org/nightly/linux/x64/bgfx-tools/shaderc
           chmod +x ./shaderc
+          
+          # 2. 下载 MaterialBinTool 0.9.1
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
+          
+          # 3. 【终极杀招】克隆官方材质数据仓库
+          git clone --depth 1 https://github.com/ddf8196/RenderDragonData.git
 
-      - name: Clean and Compile
+      - name: Setup Perfect Native Workspace
         run: |
-          # 【核心大招】：删掉你仓库里所有的旧 json 和 src 文件夹，彻底清除隐患
-          rm -rf compile
-          rm -f *.json
-          mkdir -p compile/SkyBox/src
+          # 在工作区建立一个干净的编译目录
+          mkdir -p compile/src
           mkdir -p output
           
-          # 1. 现场生成顶点着色器
-          cat > compile/SkyBox/src/Sky.vertex.sc << 'EOF'
+          # 1. 从官方仓库里直接抓取原版的 SkyBox JSON（绕过一切手写错误）
+          # 使用 find 确保能找到（不管它放在哪个版本文件夹里）
+          cp $(find RenderDragonData -name "SkyBox.material.json" | head -n 1) compile/SkyBox.material.json
+          
+          # 2. 强行把原版 JSON 里的着色器名字改成你的代码名
+          sed -i 's/"vertexShader": *"[^"]*"/"vertexShader": "Sky.vertex"/g' compile/SkyBox.material.json
+          sed -i 's/"fragmentShader": *"[^"]*"/"fragmentShader": "Sky.fragment"/g' compile/SkyBox.material.json
+          
+          # 3. 现场生成你的着色器代码（直接写死，绝对纯净）
+          cat > compile/src/Sky.vertex.sc << 'EOF'
           $input a_position
           $output v_dir
           #include <bgfx_shader.sh>
@@ -38,8 +47,7 @@ jobs:
           }
           EOF
           
-          # 2. 现场生成片元着色器
-          cat > compile/SkyBox/src/Sky.fragment.sc << 'EOF'
+          cat > compile/src/Sky.fragment.sc << 'EOF'
           $input v_dir
           #include <bgfx_shader.sh>
           SAMPLER2D(s_sky_tex, 0);
@@ -54,51 +62,13 @@ jobs:
           }
           EOF
 
-          # 3. 现场生成 varying 定义
-          cat > compile/SkyBox/src/Sky.varying.def.sc << 'EOF'
+          cat > compile/src/Sky.varying.def.sc << 'EOF'
           vec3 a_position  : POSITION;
           vec3 v_dir       : TEXCOORD0;
           EOF
           
-          # 4. 现场生成 100% 官方标准 JSON (这次绝无空指针)
-          cat > compile/SkyBox/Sky.material.json << 'EOF'
-          {
-            "materials": {
-              "version": 1,
-              "SkyBox": {
-                "states": ["DisableCulling", "DisableDepthTest"],
-                "vertexShader": "Sky.vertex",
-                "fragmentShader": "Sky.fragment",
-                "variants": [
-                  {
-                    "states": [],
-                    "samplers": ["s_sky_tex"],
-                    "vertexFields": [
-                      { "field": "POSITION" }
-                    ],
-                    "passes": [
-                      {
-                        "name": "Sky",
-                        "renderMode": "Sky",
-                        "vertexShader": "Sky.vertex",
-                        "fragmentShader": "Sky.fragment"
-                      }
-                    ]
-                  }
-                ]
-              }
-            },
-            "samplers": {
-              "s_sky_tex": {
-                "type": "texture2d",
-                "texture": "textures/sky"
-              }
-            }
-          }
-          EOF
-          
-          # 5. 执行编译
-          java -jar MaterialBinTool-0.9.1-all.jar -c "compile/SkyBox/Sky.material.json" -o "./output" --shaderc "./shaderc"
+          # 4. 编译
+          java -jar MaterialBinTool-0.9.1-all.jar -c "compile/SkyBox.material.json" -o "./output" --shaderc "./shaderc"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
