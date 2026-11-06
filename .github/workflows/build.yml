@@ -25,15 +25,12 @@ jobs:
 
       - name: Compile with Lazurite
         run: |
-          # 确保头文件和源码在正确的位置
           mkdir -p lazurite_build/SkyBox/shaders
           cp Sky.vertex.sc lazurite_build/SkyBox/shaders/
           cp Sky.fragment.sc lazurite_build/SkyBox/shaders/
           cp bgfx_shader.sh lazurite_build/SkyBox/shaders/
-          
           mkdir -p output
-          
-          # 注意：这里没有 -i 参数了！
+          # 注意：这里没有 -i 参数，搜索路径已在 project.json 中定义
           lazurite build "./lazurite_build" -o "./output" --shaderc "./shaderc"
 
       - name: Upload Artifact
