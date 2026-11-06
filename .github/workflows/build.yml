@@ -18,51 +18,11 @@ jobs:
           chmod +x ./shaderc
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
 
-      - name: Unpack, Modify, and Compile
+      - name: Compile Local Files
         run: |
           mkdir -p output
-          
-          # 1. 在云端反编译你提供的社区版 Sky.material.bin
-          java -jar MaterialBinTool-0.9.1-all.jar -u "Sky.material.bin" -o "./unpacked"
-          
-          # 2. 找到解包出来的 JSON 文件
-          TARGET_JSON=$(find ./unpacked -name "*.json" | head -n 1)
-          
-          # 3. 用 Python 注入你的代码，确保不破坏 V3 格式
-          python3 -c "
-          import json
-          with open('$TARGET_JSON', 'r') as f:
-              data = json.load(f)
-          
-          if 'materials' in data:
-              for k in data['materials']:
-                  data['materials'][k]['vertexShader'] = 'Sky.vertex'
-                  data['materials'][k]['fragmentShader'] = 'Sky.fragment'
-                  if 'passes' in data['materials'][k]:
-                      for p in data['materials'][k]['passes']:
-                          p['vertexShader'] = 'Sky.vertex'
-                          p['fragmentShader'] = 'Sky.fragment'
-          else:
-              data['vertexShader'] = 'Sky.vertex'
-              data['fragmentShader'] = 'Sky.fragment'
-              if 'passes' in data:
-                  for p in data['passes']:
-                      p['vertexShader'] = 'Sky.vertex'
-                      p['fragmentShader'] = 'Sky.fragment'
-          
-          with open('$TARGET_JSON', 'w') as f:
-              json.dump(data, f, indent=2)
-          "
-          
-          # 4. 建立 src 目录放入你的代码
-          SRC_DIR=$(dirname "$TARGET_JSON")/src
-          mkdir -p "$SRC_DIR"
-          cp Sky.vertex.sc "$SRC_DIR/"
-          cp Sky.fragment.sc "$SRC_DIR/"
-          cp varying.def.sc "$SRC_DIR/"
-          
-          # 5. 重新编译
-          java -jar MaterialBinTool-0.9.1-all.jar -c "$TARGET_JSON" -o "./output" --shaderc "./shaderc"
+          # 直接编译你本地的完美 V3 JSON
+          java -jar MaterialBinTool-0.9.1-all.jar -c "./Sky.material.json" -o "./output" --shaderc "./shaderc"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
