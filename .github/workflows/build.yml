@@ -23,7 +23,7 @@ jobs:
           mkdir -p compile/SkyBox/src
           mkdir -p output
           
-          # 1. 现场生成顶点着色器 (完全没问题)
+          # 1. 生成顶点着色器
           cat > compile/SkyBox/src/Sky.vertex.sc << 'EOF'
           $input a_position
           $output v_dir
@@ -35,7 +35,7 @@ jobs:
           }
           EOF
           
-          # 2. 现场生成片元着色器 (完全没问题)
+          # 2. 生成片元着色器
           cat > compile/SkyBox/src/Sky.fragment.sc << 'EOF'
           $input v_dir
           #include <bgfx_shader.sh>
@@ -51,33 +51,30 @@ jobs:
           }
           EOF
           
-          # 3. 现场生成 varying 定义
+          # 3. 生成 varying 定义
           cat > compile/SkyBox/src/Sky.varying.def.sc << 'EOF'
           vec3 a_position  : POSITION;
           vec3 v_dir       : TEXCOORD0;
           EOF
           
-          # 4. 现场生成【去除 version 字段】的完美 JSON
+          # 4. 生成修正后的 JSON
           cat > compile/SkyBox/Sky.material.json << 'EOF'
           {
             "materials": {
+              "version": "1.0.0",
               "Sky": {
-                "states": ["DisableCulling", "DisableDepthTest"],
-                "vertexShader": "Sky.vertex",
-                "fragmentShader": "Sky.fragment",
+                "vertexShader": "shaders/Sky.vertex",
+                "fragmentShader": "shaders/Sky.fragment",
+                "vertexFields": [
+                  { "field": "POSITION" }
+                ],
                 "variants": [
                   {
-                    "states": [],
-                    "samplers": ["s_sky_tex"],
-                    "vertexFields": [
-                      { "field": "POSITION" }
-                    ],
                     "passes": [
                       {
-                        "name": "Sky",
                         "renderMode": "Sky",
-                        "vertexShader": "Sky.vertex",
-                        "fragmentShader": "Sky.fragment"
+                        "vertexShader": "shaders/Sky.vertex",
+                        "fragmentShader": "shaders/Sky.fragment"
                       }
                     ]
                   }
