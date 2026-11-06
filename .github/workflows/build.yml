@@ -1,4 +1,4 @@
-name: Build SkyBox with Lazurite
+name: Build SkyBox Ultimate V3
 
 on:
   push:
@@ -11,71 +11,98 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install Tools & Headers
+      - name: Download Tools
         run: |
-          pip install --upgrade lazurite
           wget https://build.lwjgl.org/nightly/linux/x64/bgfx-tools/shaderc
           chmod +x ./shaderc
-          wget https://raw.githubusercontent.com/bkaradzic/bgfx/master/src/bgfx_shader.sh
+          wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
 
-      - name: Compile with Lazurite
+      - name: Generate Perfect V3 Material and Compile
         run: |
-          # 清理旧环境
-          rm -rf lazurite_build
-          mkdir -p lazurite_build/SkyBox/shaders
+          mkdir -p compile/SkyBox/src
+          mkdir -p output
           
-          # 复制所有必要的文件
-          cp Sky.vertex.sc lazurite_build/SkyBox/shaders/
-          cp Sky.fragment.sc lazurite_build/SkyBox/shaders/
-          cp bgfx_shader.sh lazurite_build/SkyBox/shaders/
-          
-          # 如果你本地没有 sky.lazurite，这里现场生成一个
-          cat > lazurite_build/sky.lazurite << 'EOF'
+          # 1. 现场生成顶点着色器
+          cat > compile/SkyBox/src/Sky.vertex.sc << 'EOF'
+          $input a_position
+          $output v_dir
+          #include <bgfx_shader.sh>
+          void main()
           {
-              "materials": [{"name": "SkyBox", "vertex_shader": "Sky.vertex", "fragment_shader": "Sky.fragment"}],
-              "shaders": [
-                  {"name": "Sky.vertex", "path": "SkyBox/shaders/Sky.vertex.sc", "type": "vertex"},
-                  {"name": "Sky.fragment", "path": "SkyBox/shaders/Sky.fragment.sc", "type": "fragment"}
-              ]
+              v_dir = a_position;
+              gl_Position = mul(u_viewProj, vec4(a_position, 1.0));
+          }
+          EOF
+          
+          # 2. 现场生成片元着色器
+          cat > compile/SkyBox/src/Sky.fragment.sc << 'EOF'
+          $input v_dir
+          #include <bgfx_shader.sh>
+          SAMPLER2D(s_sky_tex, 0);
+          void main()
+          {
+              vec3 dir = normalize(v_dir);
+              float phi = atan(dir.z, dir.x);
+              float theta = asin(dir.y);
+              vec2 uv = vec2(phi / (2.0 * PI) + 0.5, theta / PI + 0.5);
+              vec4 color = texture2D(s_sky_tex, uv);
+              gl_FragColor = color;
           }
           EOF
 
-          cat > lazurite_build/project.json << 'EOF'
-          {
-            "base_profile": {
-              "platforms": ["ESSL_320"],
-              "include_search_paths": ["SkyBox/shaders"]
-            }
-          }
+          # 3. 现场生成 varying
+          cat > compile/SkyBox/src/Sky.varying.def.sc << 'EOF'
+          vec3 a_position  : POSITION;
+          vec3 v_dir       : TEXCOORD0;
           EOF
           
-          cat > lazurite_build/SkyBox/SkyBox.material.json << 'EOF'
+          # 4. 现场生成绝对完美的 26.x 版本 V3 JSON
+          cat > compile/SkyBox/Sky.material.json << 'EOF'
           {
-            "materials": [
+            "version": 25,
+            "encryptionVariant": "None",
+            "name": "Sky",
+            "hasParentName": false,
+            "samplerDefinitionMap": {
+              "s_sky_tex": {
+                "reg": 0,
+                "access": "Read",
+                "precision": 0,
+                "allowUnorderedAccess": false,
+                "type": "Texture2D",
+                "textureFormat": "float",
+                "unknown1": 1,
+                "unknownByte": 0,
+                "hasUnknownByte2": false,
+                "unknownByte2": 0,
+                "hasDefaultTexture": false,
+                "hasUnknownString": false,
+                "hasCustomTypeInfo": false
+              }
+            },
+            "propertyFieldMap": {
+              "FogColor": { "num": 1, "type": 2, "hasData": true, "vectorData": [1.0, 1.0, 1.0, 1.0] },
+              "LightDiffuseColorAndIlluminance": { "num": 1, "type": 2, "hasData": true, "vectorData": [1.0, 1.0, 1.0, 1.0] },
+              "LightWorldSpaceDirection": { "num": 1, "type": 2, "hasData": true, "vectorData": [0.0, -1.0, 0.0, 1.0] },
+              "MaterialID": { "num": 1, "type": 2, "hasData": true, "vectorData": [0.0, 0.0, 0.0, 0.0] },
+              "SkyColor": { "num": 1, "type": 2, "hasData": true, "vectorData": [1.0, 1.0, 1.0, 1.0] }
+            },
+            "formatVersion": "V3",
+            "passes": [
               {
-                "name": "SkyBox",
-                "type": "skybox",
+                "name": "Sky",
                 "vertexShader": "Sky.vertex",
                 "fragmentShader": "Sky.fragment",
-                "samplers": [
-                  {
-                    "name": "s_sky_tex",
-                    "texture": "textures/sky"
-                  }
-                ]
+                "renderMode": "Sky",
+                "vertexFields": ["POSITION"],
+                "samplers": ["s_sky_tex"]
               }
             ]
           }
           EOF
-
-          mkdir -p output
-          # 执行编译
-          lazurite build "./lazurite_build" -o "./output" --shaderc "./shaderc"
+          
+          # 5. 直接用 MaterialBinTool 编译
+          java -jar MaterialBinTool-0.9.1-all.jar -c "compile/SkyBox/Sky.material.json" -o "./output" --shaderc "./shaderc"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
