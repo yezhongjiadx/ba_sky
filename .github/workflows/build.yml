@@ -9,48 +9,19 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
       - name: Download Tools
         run: |
           wget https://build.lwjgl.org/nightly/linux/x64/bgfx-tools/shaderc
           chmod +x ./shaderc
           wget https://github.com/ddf8196/MaterialBinTool/releases/download/v0.9.1/MaterialBinTool-0.9.1-all.jar
 
-      - name: Unpack Official Bin, Replace Code, and Compile
+      - name: Generate Perfect Workspace and Compile
         run: |
+          mkdir -p compile/src
           mkdir -p output
-          mkdir -p unpacked
           
-          # 1. 反编译
-          BIN_FILE=$(find . -maxdepth 1 -name "*.material.bin" | head -n 1)
-          echo "找到的原始文件: $BIN_FILE"
-          java -jar MaterialBinTool-0.9.1-all.jar -u "$BIN_FILE" -o ./unpacked
-          
-          # 【打印一下解包出来的结构，方便排错】
-          echo "====== 解包后的目录结构 ======"
-          ls -R ./unpacked
-          echo "=============================="
-          
-          # 2. 放宽搜索条件，找所有的 json
-          TARGET_JSON=$(find ./unpacked -type f -name "*.json" | head -n 1)
-          echo "找到的完美 JSON: $TARGET_JSON"
-          
-          if [ -z "$TARGET_JSON" ]; then
-            echo "Error: 解包后找不到任何 JSON 文件！"
-            exit 1
-          fi
-          
-          # 3. 修改 JSON 里的着色器名字
-          sed -i 's/"vertexShader": *"[^"]*"/"vertexShader": "Sky.vertex"/g' "$TARGET_JSON"
-          sed -i 's/"fragmentShader": *"[^"]*"/"fragmentShader": "Sky.fragment"/g' "$TARGET_JSON"
-          
-          # 4. 把代码放入 src
-          SRC_DIR=$(dirname "$TARGET_JSON")/src
-          mkdir -p "$SRC_DIR"
-          
-          cat > "$SRC_DIR/Sky.vertex.sc" << 'EOF'
+          # 1. 现场写入你的顶点着色器
+          cat > compile/src/Sky.vertex.sc << 'EOF'
           $input a_position
           $output v_dir
           #include <bgfx_shader.sh>
@@ -61,7 +32,8 @@ jobs:
           }
           EOF
           
-          cat > "$SRC_DIR/Sky.fragment.sc" << 'EOF'
+          # 2. 现场写入你的片元着色器
+          cat > compile/src/Sky.fragment.sc << 'EOF'
           $input v_dir
           #include <bgfx_shader.sh>
           SAMPLER2D(s_sky_tex, 0);
@@ -76,13 +48,39 @@ jobs:
           }
           EOF
 
-          cat > "$SRC_DIR/Sky.varying.def.sc" << 'EOF'
+          # 3. 现场写入 varying 定义
+          cat > compile/src/Sky.varying.def.sc << 'EOF'
           vec3 a_position  : POSITION;
           vec3 v_dir       : TEXCOORD0;
           EOF
           
+          # 4. 【核心】现场生成带有完整 passes 和 variants 的完美 JSON
+          cat > compile/SkyBox.material.json << 'EOF'
+          {
+            "materials": {
+              "version": 1,
+              "SkyBox": {
+                "vertexShader": "Sky.vertex",
+                "fragmentShader": "Sky.fragment",
+                "variants": [
+                  {
+                    "passes": [
+                      {
+                        "name": "Sky",
+                        "renderMode": "Sky",
+                        "vertexShader": "Sky.vertex",
+                        "fragmentShader": "Sky.fragment"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+          EOF
+          
           # 5. 编译
-          java -jar MaterialBinTool-0.9.1-all.jar -c "$TARGET_JSON" -o "./output" --shaderc "./shaderc"
+          java -jar MaterialBinTool-0.9.1-all.jar -c "compile/SkyBox.material.json" -o "./output" --shaderc "./shaderc"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
